@@ -213,72 +213,42 @@ function Build-Menu() {
         # Get git status
         $gitStatus = Get-GitStatus $projPath
 
-        # Create project submenu with custom painting for dual-color text
+        # Create project submenu
         $projItem = New-Object System.Windows.Forms.ToolStripMenuItem($projName)
         $projItem.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
         $projItem.ForeColor = [System.Drawing.Color]::White
-        $projItem.Tag = @{ GitStatus = $gitStatus; Name = $projName }
 
-        # Owner-draw for mixed font sizes and colors
-        $projItem.OwnerDraw = $true
-        $projItem.Add_MeasureItem({
-            param($sender, $e)
-            $nameFont = New-Object System.Drawing.Font("Segoe UI", 10)
-            $statusFont = New-Object System.Drawing.Font("Segoe UI", 8)
-            $nameSize = [System.Windows.Forms.TextRenderer]::MeasureText($sender.Tag.Name, $nameFont)
-            $statusSize = if ($sender.Tag.GitStatus) {
-                [System.Windows.Forms.TextRenderer]::MeasureText("  " + $sender.Tag.GitStatus, $statusFont)
-            } else { New-Object System.Drawing.Size(0, 0) }
-            $e.ItemWidth = $nameSize.Width + $statusSize.Width + 40
-            $e.ItemHeight = 30
-            $nameFont.Dispose()
-            $statusFont.Dispose()
-        })
-        $projItem.Add_DrawItem({
-            param($sender, $e)
-            $e.DrawBackground()
-            if ($e.State -band [System.Windows.Forms.DrawItemState]::Selected) {
-                $hBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(55, 55, 58))
-                $e.Graphics.FillRectangle($hBrush, $e.Bounds)
-                $hBrush.Dispose()
+        # Add git status as a small non-clickable label in the submenu
+        if ($gitStatus) {
+            $check = [char]0x2713
+            $bullet = [char]0x25CF
+            $upArrow = [char]0x2191
+            if ($gitStatus.Contains($check)) {
+                $projItem.ForeColor = [System.Drawing.Color]::FromArgb(120, 210, 120)
+            } elseif ($gitStatus.Contains($bullet) -or $gitStatus.Contains($upArrow)) {
+                $projItem.ForeColor = [System.Drawing.Color]::FromArgb(240, 190, 60)
             }
-            $nameFont = New-Object System.Drawing.Font("Segoe UI", 10)
-            $statusFont = New-Object System.Drawing.Font("Segoe UI", 7.5)
-            $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
-
-            # Draw project name
-            $nameX = $e.Bounds.X + 8
-            $nameY = $e.Bounds.Y + 5
-            $e.Graphics.DrawString($sender.Tag.Name, $nameFont, $whiteBrush, $nameX, $nameY)
-
-            # Draw git status in smaller colored text
-            $gs = $sender.Tag.GitStatus
-            if ($gs) {
-                $nameSize = [System.Windows.Forms.TextRenderer]::MeasureText($sender.Tag.Name, $nameFont)
-                $statusX = $nameX + $nameSize.Width - 2
-                $statusY = $nameY + 3
-
-                $check = [char]0x2713
-                $bullet = [char]0x25CF
-                $upArrow = [char]0x2191
-                $statusColor = if ($gs.Contains($check)) {
-                    [System.Drawing.Color]::FromArgb(80, 190, 80)
-                } elseif ($gs.Contains($bullet) -or $gs.Contains($upArrow)) {
-                    [System.Drawing.Color]::FromArgb(240, 180, 50)
-                } else {
-                    [System.Drawing.Color]::FromArgb(140, 140, 140)
-                }
-                $statusBrush = New-Object System.Drawing.SolidBrush($statusColor)
-                $e.Graphics.DrawString("  $gs", $statusFont, $statusBrush, $statusX, $statusY)
-                $statusBrush.Dispose()
-            }
-
-            $nameFont.Dispose()
-            $statusFont.Dispose()
-            $whiteBrush.Dispose()
-        })
+        }
 
         # --- Submenu items ---
+
+        # Git status label at top of submenu
+        if ($gitStatus) {
+            $statusLabel = New-Object System.Windows.Forms.ToolStripLabel("  $gitStatus")
+            $statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8)
+            $check = [char]0x2713
+            $bullet = [char]0x25CF
+            $upArrow = [char]0x2191
+            if ($gitStatus.Contains($check)) {
+                $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(100, 200, 100)
+            } elseif ($gitStatus.Contains($bullet) -or $gitStatus.Contains($upArrow)) {
+                $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(240, 190, 60)
+            } else {
+                $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(140, 140, 140)
+            }
+            $projItem.DropDownItems.Add($statusLabel) | Out-Null
+            $projItem.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
+        }
 
         # New Session
         $newItem = New-Object System.Windows.Forms.ToolStripMenuItem("New Session")
