@@ -62,10 +62,9 @@ $claudeProjectsDir = Join-Path $env:USERPROFILE ".claude\projects"
 
 function Get-ProjectSlug($path) {
     # Convert project path to Claude's directory slug format
-    $slug = $path -replace ':', ''
-    $slug = $slug -replace '\\', '-'
-    $slug = $slug -replace '/', '-'
-    $slug = $slug -replace ' ', '-'
+    # C:\Users\foo -> C--Users-foo
+    $slug = $path -replace ':', '-'
+    $slug = $slug -replace '[\\/ _]', '-'
     return $slug
 }
 
@@ -213,19 +212,71 @@ function Build-Menu() {
 
         # Get git status
         $gitStatus = Get-GitStatus $projPath
-        $displayName = if ($gitStatus) { "$projName  $gitStatus" } else { $projName }
 
-        # Create project submenu
-        $projItem = New-Object System.Windows.Forms.ToolStripMenuItem($displayName)
+        # Create project submenu with custom painting for dual-color text
+        $projItem = New-Object System.Windows.Forms.ToolStripMenuItem($projName)
         $projItem.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
         $projItem.ForeColor = [System.Drawing.Color]::White
+        $projItem.Tag = @{ GitStatus = $gitStatus; Name = $projName }
 
-        # Color the git status portion
-        if ($gitStatus -match ([char]0x2713)) {
-            # all clean - no special color needed
-        } elseif ($gitStatus -match ([char]0x25CF) -or $gitStatus -match ([char]0x2191)) {
-            $projItem.ForeColor = [System.Drawing.Color]::FromArgb(255, 200, 80)
-        }
+        # Owner-draw for mixed font sizes and colors
+        $projItem.OwnerDraw = $true
+        $projItem.Add_MeasureItem({
+            param($sender, $e)
+            $nameFont = New-Object System.Drawing.Font("Segoe UI", 10)
+            $statusFont = New-Object System.Drawing.Font("Segoe UI", 8)
+            $nameSize = [System.Windows.Forms.TextRenderer]::MeasureText($sender.Tag.Name, $nameFont)
+            $statusSize = if ($sender.Tag.GitStatus) {
+                [System.Windows.Forms.TextRenderer]::MeasureText("  " + $sender.Tag.GitStatus, $statusFont)
+            } else { New-Object System.Drawing.Size(0, 0) }
+            $e.ItemWidth = $nameSize.Width + $statusSize.Width + 40
+            $e.ItemHeight = 30
+            $nameFont.Dispose()
+            $statusFont.Dispose()
+        })
+        $projItem.Add_DrawItem({
+            param($sender, $e)
+            $e.DrawBackground()
+            if ($e.State -band [System.Windows.Forms.DrawItemState]::Selected) {
+                $hBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(55, 55, 58))
+                $e.Graphics.FillRectangle($hBrush, $e.Bounds)
+                $hBrush.Dispose()
+            }
+            $nameFont = New-Object System.Drawing.Font("Segoe UI", 10)
+            $statusFont = New-Object System.Drawing.Font("Segoe UI", 7.5)
+            $whiteBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+
+            # Draw project name
+            $nameX = $e.Bounds.X + 8
+            $nameY = $e.Bounds.Y + 5
+            $e.Graphics.DrawString($sender.Tag.Name, $nameFont, $whiteBrush, $nameX, $nameY)
+
+            # Draw git status in smaller colored text
+            $gs = $sender.Tag.GitStatus
+            if ($gs) {
+                $nameSize = [System.Windows.Forms.TextRenderer]::MeasureText($sender.Tag.Name, $nameFont)
+                $statusX = $nameX + $nameSize.Width - 2
+                $statusY = $nameY + 3
+
+                $check = [char]0x2713
+                $bullet = [char]0x25CF
+                $upArrow = [char]0x2191
+                $statusColor = if ($gs.Contains($check)) {
+                    [System.Drawing.Color]::FromArgb(80, 190, 80)
+                } elseif ($gs.Contains($bullet) -or $gs.Contains($upArrow)) {
+                    [System.Drawing.Color]::FromArgb(240, 180, 50)
+                } else {
+                    [System.Drawing.Color]::FromArgb(140, 140, 140)
+                }
+                $statusBrush = New-Object System.Drawing.SolidBrush($statusColor)
+                $e.Graphics.DrawString("  $gs", $statusFont, $statusBrush, $statusX, $statusY)
+                $statusBrush.Dispose()
+            }
+
+            $nameFont.Dispose()
+            $statusFont.Dispose()
+            $whiteBrush.Dispose()
+        })
 
         # --- Submenu items ---
 

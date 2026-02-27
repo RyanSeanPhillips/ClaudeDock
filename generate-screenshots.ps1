@@ -152,14 +152,18 @@ $gfx.DrawString("^", $trayFont, $trayBrush, 8, 12)
 $gfx.DrawString("Wi-Fi", $smallFont, $trayBrush, 40, 14)
 $gfx.DrawString("Vol", $smallFont, $trayBrush, 90, 14)
 
-# ClaudeDock icon (orange dot to represent it)
-$iconBrush = New-Object System.Drawing.SolidBrush($accentColor)
-$gfx.FillEllipse($iconBrush, 140, 10, 24, 24)
-
-# Arrow indicator
-$arrowFont = New-Object System.Drawing.Font("Consolas", 7, [System.Drawing.FontStyle]::Bold)
-$darkBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 30, 30))
-$gfx.DrawString("C>", $arrowFont, $darkBrush, 143, 16)
+# ClaudeDock rocket icon - load from variant_c.png and draw scaled
+$rocketPath = Join-Path $docsDir "variant_c.png"
+if (Test-Path $rocketPath) {
+    $rocketImg = [System.Drawing.Image]::FromFile($rocketPath)
+    $gfx.InterpolationMode = "NearestNeighbor"
+    $gfx.DrawImage($rocketImg, 138, 8, 28, 28)
+    $rocketImg.Dispose()
+} else {
+    # Fallback orange circle
+    $iconBrush = New-Object System.Drawing.SolidBrush($accentColor)
+    $gfx.FillEllipse($iconBrush, 140, 10, 24, 24)
+}
 
 # Time
 $timeBrush = New-Object System.Drawing.SolidBrush($textColor)
