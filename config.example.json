@@ -1,0 +1,18 @@
+{
+    "projects": [
+        {
+            "name": "My Project",
+            "path": "C:\\Users\\you\\projects\\my-project"
+        },
+        {
+            "name": "Another Project",
+            "path": "C:\\Users\\you\\projects\\another"
+        }
+    ],
+    "launch": {
+        "explorer": true,
+        "vscode": true,
+        "claude": true
+    },
+    "icon_color": "#DA8F4E"
+}
