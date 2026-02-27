@@ -1,6 +1,20 @@
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
+# --- Win32 API for virtual desktop window management ---
+Add-Type @"
+using System;
+using System.Runtime.InteropServices;
+public class VDesktop {
+    [DllImport("user32.dll")]
+    public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")]
+    public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+}
+"@
+
 # --- Load config ---
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $configPath = Join-Path $scriptDir "config.json"
@@ -53,9 +67,18 @@ $icon = [System.Drawing.Icon]::FromHandle($hIcon)
 
 # --- Launch function ---
 function Launch-Project($path) {
-    if ($launchOpts.explorer) { Start-Process explorer $path }
-    if ($launchOpts.vscode)   { Start-Process code $path }
-    if ($launchOpts.claude)   { Start-Process cmd "/k cd /d `"$path`" && claude" }
+    # Open a new Explorer window (not reusing existing)
+    if ($launchOpts.explorer) {
+        Start-Process explorer.exe "/n,`"$path`""
+    }
+    # VS Code: --new-window forces a new window on the current desktop
+    if ($launchOpts.vscode) {
+        Start-Process code "--new-window `"$path`""
+    }
+    # cmd always opens a new window on current desktop
+    if ($launchOpts.claude) {
+        Start-Process cmd "/k cd /d `"$path`" && claude"
+    }
 }
 
 # --- Context menu ---
@@ -105,7 +128,7 @@ foreach ($item in $contextMenu.Items) {
 # --- System tray icon ---
 $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
 $notifyIcon.Icon = $icon
-$notifyIcon.Text = "Claude Project Launcher"
+$notifyIcon.Text = "ClaudeDock"
 $notifyIcon.Visible = $true
 $notifyIcon.ContextMenuStrip = $contextMenu
 
