@@ -306,6 +306,7 @@ function Build-Menu() {
 
         # Style submenu
         $projItem.DropDown.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 43)
+        $projItem.DropDown.ShowImageMargin = $false
 
         $contextMenu.Items.Add($projItem) | Out-Null
     }
