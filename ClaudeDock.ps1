@@ -30,40 +30,28 @@ $config = Get-Content $configPath -Raw | ConvertFrom-Json
 $projects = $config.projects
 $launchOpts = $config.launch
 
-# Parse icon color from hex
-$hexColor = $config.icon_color.TrimStart('#')
-$r = [Convert]::ToInt32($hexColor.Substring(0,2), 16)
-$g_val = [Convert]::ToInt32($hexColor.Substring(2,2), 16)
-$b = [Convert]::ToInt32($hexColor.Substring(4,2), 16)
-$iconColor = [System.Drawing.Color]::FromArgb($r, $g_val, $b)
-
-# --- Generate icon ---
-$bmp = New-Object System.Drawing.Bitmap(64, 64)
-$gfx = [System.Drawing.Graphics]::FromImage($bmp)
-$gfx.SmoothingMode = "AntiAlias"
-$gfx.TextRenderingHint = "AntiAliasGridFit"
-$gfx.Clear([System.Drawing.Color]::Transparent)
-
-$bgBrush = New-Object System.Drawing.SolidBrush($iconColor)
-$gfx.FillEllipse($bgBrush, 2, 2, 60, 60)
-
-$font = New-Object System.Drawing.Font("Consolas", 20, [System.Drawing.FontStyle]::Bold)
-$textBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 30, 30))
-$sf = New-Object System.Drawing.StringFormat
-$sf.Alignment = "Center"
-$sf.LineAlignment = "Center"
-$gfx.DrawString("C>", $font, $textBrush, (New-Object System.Drawing.RectangleF(0, -2, 64, 52)), $sf)
-
-$arrowPen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(30, 30, 30), 3)
-$arrowPen.StartCap = "Round"
-$arrowPen.EndCap = "Round"
-$gfx.DrawLine($arrowPen, 32, 58, 32, 46)
-$gfx.DrawLine($arrowPen, 26, 52, 32, 46)
-$gfx.DrawLine($arrowPen, 38, 52, 32, 46)
-$gfx.Dispose()
-
-$hIcon = $bmp.GetHicon()
-$icon = [System.Drawing.Icon]::FromHandle($hIcon)
+# --- Load icon ---
+$icoPath = Join-Path $scriptDir "ClaudeDock.ico"
+if (Test-Path $icoPath) {
+    $icon = New-Object System.Drawing.Icon($icoPath)
+} else {
+    # Fallback: generate simple icon if .ico missing
+    $bmp = New-Object System.Drawing.Bitmap(64, 64)
+    $gfx = [System.Drawing.Graphics]::FromImage($bmp)
+    $gfx.SmoothingMode = "AntiAlias"
+    $gfx.Clear([System.Drawing.Color]::Transparent)
+    $bgBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(218, 143, 78))
+    $gfx.FillEllipse($bgBrush, 2, 2, 60, 60)
+    $font = New-Object System.Drawing.Font("Consolas", 20, [System.Drawing.FontStyle]::Bold)
+    $textBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 30, 30))
+    $sf = New-Object System.Drawing.StringFormat
+    $sf.Alignment = "Center"
+    $sf.LineAlignment = "Center"
+    $gfx.DrawString("CD", $font, $textBrush, (New-Object System.Drawing.RectangleF(0, 0, 64, 64)), $sf)
+    $gfx.Dispose()
+    $hIcon = $bmp.GetHicon()
+    $icon = [System.Drawing.Icon]::FromHandle($hIcon)
+}
 
 # --- Launch function ---
 function Launch-Project($path) {
