@@ -1,3 +1,7 @@
+$ErrorActionPreference = "Stop"
+$logFile = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) "debug.log"
+try {
+
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 
@@ -141,10 +145,13 @@ function Get-GitStatus($projectPath) {
             }
         }
 
+        $upArrow = [char]0x2191
+        $bullet = [char]0x25CF
+        $check = [char]0x2713
         $status = "($branch"
-        if ($unpushed -gt 0) { $status += " ↑$unpushed" }
-        if ($dirty -gt 0) { $status += " ●$dirty" }
-        if ($unpushed -eq 0 -and $dirty -eq 0) { $status += " ✓" }
+        if ($unpushed -gt 0) { $status += " $upArrow$unpushed" }
+        if ($dirty -gt 0) { $status += " $bullet$dirty" }
+        if ($unpushed -eq 0 -and $dirty -eq 0) { $status += " $check" }
         $status += ")"
 
         return $status
@@ -154,36 +161,32 @@ function Get-GitStatus($projectPath) {
 }
 
 # --- Launch functions ---
+function Open-Explorer($path) {
+    Start-Process explorer.exe -ArgumentList "/n,`"$path`""
+}
+
+function Open-VSCode($path) {
+    Start-Process cmd -ArgumentList ("/c code --new-window `"$path`"") -WindowStyle Hidden
+}
+
 function Launch-Project($path) {
-    if ($launchOpts.explorer) {
-        Start-Process explorer.exe "/n,`"$path`""
-    }
-    if ($launchOpts.vscode) {
-        Start-Process cmd "/c code --new-window `"$path`"" -WindowStyle Hidden
-    }
+    if ($launchOpts.explorer) { Open-Explorer $path }
+    if ($launchOpts.vscode)   { Open-VSCode $path }
     if ($launchOpts.claude) {
-        Start-Process cmd "/k cd /d `"$path`" && claude"
+        Start-Process cmd -ArgumentList ("/k cd /d `"$path`" `&`& claude")
     }
 }
 
 function Launch-ProjectContinue($path) {
-    if ($launchOpts.explorer) {
-        Start-Process explorer.exe "/n,`"$path`""
-    }
-    if ($launchOpts.vscode) {
-        Start-Process cmd "/c code --new-window `"$path`"" -WindowStyle Hidden
-    }
-    Start-Process cmd "/k cd /d `"$path`" && claude --continue"
+    if ($launchOpts.explorer) { Open-Explorer $path }
+    if ($launchOpts.vscode)   { Open-VSCode $path }
+    Start-Process cmd -ArgumentList ("/k cd /d `"$path`" `&`& claude --continue")
 }
 
 function Launch-ProjectResume($path, $sessionId) {
-    if ($launchOpts.explorer) {
-        Start-Process explorer.exe "/n,`"$path`""
-    }
-    if ($launchOpts.vscode) {
-        Start-Process cmd "/c code --new-window `"$path`"" -WindowStyle Hidden
-    }
-    Start-Process cmd "/k cd /d `"$path`" && claude --resume $sessionId"
+    if ($launchOpts.explorer) { Open-Explorer $path }
+    if ($launchOpts.vscode)   { Open-VSCode $path }
+    Start-Process cmd -ArgumentList ("/k cd /d `"$path`" `&`& claude --resume $sessionId")
 }
 
 # --- Build context menu dynamically on each open ---
@@ -218,9 +221,9 @@ function Build-Menu() {
         $projItem.ForeColor = [System.Drawing.Color]::White
 
         # Color the git status portion
-        if ($gitStatus -match '✓') {
+        if ($gitStatus -match ([char]0x2713)) {
             # all clean - no special color needed
-        } elseif ($gitStatus -match '●|↑') {
+        } elseif ($gitStatus -match ([char]0x25CF) -or $gitStatus -match ([char]0x2191)) {
             $projItem.ForeColor = [System.Drawing.Color]::FromArgb(255, 200, 80)
         }
 
@@ -332,3 +335,8 @@ $notifyIcon.Add_MouseClick({
 
 $appContext = New-Object System.Windows.Forms.ApplicationContext
 [System.Windows.Forms.Application]::Run($appContext)
+
+} catch {
+    $_ | Out-File $logFile -Append
+    $_.ScriptStackTrace | Out-File $logFile -Append
+}
