@@ -72,8 +72,9 @@ function Launch-Project($path) {
         Start-Process explorer.exe "/n,`"$path`""
     }
     # VS Code: --new-window forces a new window on the current desktop
+    # Launch via cmd /c with hidden window to avoid extra cmd flash (code is a .cmd file)
     if ($launchOpts.vscode) {
-        Start-Process code "--new-window `"$path`""
+        Start-Process cmd "/c code --new-window `"$path`"" -WindowStyle Hidden
     }
     # cmd always opens a new window on current desktop
     if ($launchOpts.claude) {
