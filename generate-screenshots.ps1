@@ -6,166 +6,185 @@ if (-not (Test-Path $docsDir)) { New-Item -ItemType Directory -Path $docsDir | O
 
 # Colors matching the dark theme
 $bgColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+$subBgColor = [System.Drawing.Color]::FromArgb(40, 40, 43)
 $textColor = [System.Drawing.Color]::White
 $dimColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
 $sepColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
 $quitColor = [System.Drawing.Color]::FromArgb(180, 80, 80)
 $hoverColor = [System.Drawing.Color]::FromArgb(55, 55, 58)
 $accentColor = [System.Drawing.Color]::FromArgb(217, 119, 6)
+$greenColor = [System.Drawing.Color]::FromArgb(120, 210, 120)
+$yellowColor = [System.Drawing.Color]::FromArgb(240, 190, 60)
+$blueColor = [System.Drawing.Color]::FromArgb(140, 200, 255)
+$statusColor = [System.Drawing.Color]::FromArgb(100, 200, 100)
+$sessionDimColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
 
 $menuFont = New-Object System.Drawing.Font("Segoe UI", 12)
 $headerFont = New-Object System.Drawing.Font("Segoe UI", 10, [System.Drawing.FontStyle]::Italic)
 $smallFont = New-Object System.Drawing.Font("Segoe UI", 9)
+$tinyFont = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Italic)
+$statusFont = New-Object System.Drawing.Font("Segoe UI", 8)
 
-function Draw-MenuMockup($filename, $items, $width, $hoverIndex) {
-    # items: array of @{ text; type; color }
-    # type: "header", "item", "separator", "quit"
-
-    $rowHeight = 34
-    $headerHeight = 28
-    $sepHeight = 12
-    $padding = 16
-
-    # Calculate height
-    $totalH = 8  # top padding
+function Draw-Panel($gfx, $x, $y, $width, $items, $borderColor, $bgFill) {
+    # Draw background
+    $bgBrush = New-Object System.Drawing.SolidBrush($bgFill)
+    $totalH = 8
     foreach ($item in $items) {
         switch ($item.type) {
-            "header"    { $totalH += $headerHeight }
-            "separator" { $totalH += $sepHeight }
-            default     { $totalH += $rowHeight }
+            "header"    { $totalH += 24 }
+            "separator" { $totalH += 10 }
+            "label"     { $totalH += 22 }
+            default     { $totalH += 30 }
         }
     }
-    $totalH += 8  # bottom padding
-
-    $bmp = New-Object System.Drawing.Bitmap($width, $totalH)
-    $gfx = [System.Drawing.Graphics]::FromImage($bmp)
-    $gfx.SmoothingMode = "AntiAlias"
-    $gfx.TextRenderingHint = "ClearTypeGridFit"
-
-    # Background with rounded feel
-    $gfx.Clear($bgColor)
+    $totalH += 8
+    $gfx.FillRectangle($bgBrush, $x, $y, $width, $totalH)
+    $bgBrush.Dispose()
 
     # Border
-    $borderPen = New-Object System.Drawing.Pen($sepColor, 1)
-    $gfx.DrawRectangle($borderPen, 0, 0, $width - 1, $totalH - 1)
+    $borderPen = New-Object System.Drawing.Pen($borderColor, 1)
+    $gfx.DrawRectangle($borderPen, $x, $y, $width - 1, $totalH - 1)
+    $borderPen.Dispose()
 
-    $y = 8
-    $idx = 0
+    $cy = $y + 8
     foreach ($item in $items) {
+        $pad = $x + 12
         switch ($item.type) {
             "header" {
                 $brush = New-Object System.Drawing.SolidBrush($dimColor)
-                $gfx.DrawString("  " + $item.text, $headerFont, $brush, $padding, $y + 4)
+                $gfx.DrawString($item.text, $headerFont, $brush, $pad, $cy + 2)
                 $brush.Dispose()
-                $y += $headerHeight
+                $cy += 24
             }
             "separator" {
                 $pen = New-Object System.Drawing.Pen($sepColor, 1)
-                $gfx.DrawLine($pen, $padding, $y + $sepHeight/2, $width - $padding, $y + $sepHeight/2)
+                $gfx.DrawLine($pen, $pad, $cy + 5, $x + $width - 12, $cy + 5)
                 $pen.Dispose()
-                $y += $sepHeight
+                $cy += 10
+            }
+            "label" {
+                $brush = New-Object System.Drawing.SolidBrush($item.color)
+                $gfx.DrawString($item.text, $item.font, $brush, $pad, $cy + 2)
+                $brush.Dispose()
+                $cy += 22
             }
             "quit" {
-                if ($idx -eq $hoverIndex) {
-                    $hBrush = New-Object System.Drawing.SolidBrush($hoverColor)
-                    $gfx.FillRectangle($hBrush, 2, $y, $width - 4, $rowHeight)
-                    $hBrush.Dispose()
-                }
                 $brush = New-Object System.Drawing.SolidBrush($quitColor)
-                $gfx.DrawString($item.text, $menuFont, $brush, $padding, $y + 6)
+                $gfx.DrawString($item.text, $menuFont, $brush, $pad, $cy + 4)
                 $brush.Dispose()
-                $y += $rowHeight
+                $cy += 30
             }
             default {
-                if ($idx -eq $hoverIndex) {
+                if ($item.hover) {
                     $hBrush = New-Object System.Drawing.SolidBrush($hoverColor)
-                    $gfx.FillRectangle($hBrush, 2, $y, $width - 4, $rowHeight)
+                    $gfx.FillRectangle($hBrush, $x + 2, $cy, $width - 4, 30)
                     $hBrush.Dispose()
                 }
                 $color = if ($item.color) { $item.color } else { $textColor }
+                $font = if ($item.font) { $item.font } else { $menuFont }
                 $brush = New-Object System.Drawing.SolidBrush($color)
-                $gfx.DrawString($item.text, $menuFont, $brush, $padding, $y + 6)
+                $gfx.DrawString($item.text, $font, $brush, $pad, $cy + 4)
                 $brush.Dispose()
 
-                # Draw arrow for submenu items
-                if ($item.submenu) {
+                # Arrow for submenu
+                if ($item.arrow) {
                     $arrowBrush = New-Object System.Drawing.SolidBrush($dimColor)
-                    $gfx.DrawString([char]0x25B8, $smallFont, $arrowBrush, $width - 28, $y + 8)
+                    $arrowChar = [string]([char]0x25B8)
+                    $gfx.DrawString($arrowChar, $smallFont, $arrowBrush, $x + $width - 22, $cy + 6)
                     $arrowBrush.Dispose()
                 }
-                $y += $rowHeight
+                $cy += 30
             }
         }
-        $idx++
     }
-
-    $gfx.Dispose()
-    $bmp.Save((Join-Path $docsDir $filename), [System.Drawing.Imaging.ImageFormat]::Png)
-    $bmp.Dispose()
-    Write-Host "  Generated $filename"
+    return $totalH
 }
 
-# --- Screenshot 1: Basic menu ---
-$menuItems = @(
-    @{ text = "Launch Project"; type = "header" },
+# ============================================================
+# Screenshot 1: Main menu with git status colors
+# ============================================================
+$img1W = 280
+$img1H = 260
+$bmp1 = New-Object System.Drawing.Bitmap($img1W, $img1H)
+$gfx = [System.Drawing.Graphics]::FromImage($bmp1)
+$gfx.Clear([System.Drawing.Color]::Transparent)
+$gfx.TextRenderingHint = "ClearTypeGridFit"
+
+$mainItems = @(
+    @{ text = "ClaudeDock"; type = "header" },
     @{ text = ""; type = "separator" },
-    @{ text = "Weather Dashboard"; type = "item" },
-    @{ text = "ML Pipeline"; type = "item" },
-    @{ text = "React Frontend"; type = "item" },
-    @{ text = "API Server"; type = "item" },
+    @{ text = "Weather Dashboard"; type = "item"; color = $greenColor; arrow = $true },
+    @{ text = "ML Pipeline"; type = "item"; color = $yellowColor; arrow = $true; hover = $true },
+    @{ text = "React Frontend"; type = "item"; color = $greenColor; arrow = $true },
+    @{ text = "API Server"; type = "item"; color = $yellowColor; arrow = $true },
     @{ text = ""; type = "separator" },
     @{ text = "Quit"; type = "quit" }
 )
-Draw-MenuMockup "screenshot_menu.png" $menuItems 260 $null
+Draw-Panel $gfx 0 0 $img1W $mainItems $sepColor $bgColor
+$gfx.Dispose()
+$bmp1.Save((Join-Path $docsDir "screenshot_menu.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp1.Dispose()
+Write-Host "  Generated screenshot_menu.png"
 
-# --- Screenshot 2: Menu with hover ---
-Draw-MenuMockup "screenshot_hover.png" $menuItems 260 3
+# ============================================================
+# Screenshot 2: Main menu + expanded submenu
+# ============================================================
+$img2W = 580
+$img2H = 300
+$bmp2 = New-Object System.Drawing.Bitmap($img2W, $img2H)
+$gfx = [System.Drawing.Graphics]::FromImage($bmp2)
+$gfx.Clear([System.Drawing.Color]::Transparent)
+$gfx.TextRenderingHint = "ClearTypeGridFit"
 
-# --- Screenshot 3: Future - with submenus (session resume) ---
-$menuItems2 = @(
-    @{ text = "Launch Project"; type = "header" },
+# Main menu
+Draw-Panel $gfx 0 0 $img1W $mainItems $sepColor $bgColor
+
+# Submenu (expanded from ML Pipeline)
+$subItems = @(
+    @{ text = "(dev " + [string]([char]0x2191) + "2 " + [string]([char]0x25CF) + "3)"; type = "label"; color = $yellowColor; font = $statusFont },
     @{ text = ""; type = "separator" },
-    @{ text = "Weather Dashboard"; type = "item"; submenu = $true },
-    @{ text = "ML Pipeline"; type = "item"; submenu = $true },
-    @{ text = "React Frontend"; type = "item"; submenu = $true },
-    @{ text = "API Server"; type = "item"; submenu = $true },
+    @{ text = "New Session"; type = "item" },
+    @{ text = "Continue Last"; type = "item"; color = $blueColor },
     @{ text = ""; type = "separator" },
-    @{ text = "Quit"; type = "quit" }
+    @{ text = "  Recent Sessions"; type = "label"; color = [System.Drawing.Color]::FromArgb(120, 120, 120); font = $tinyFont },
+    @{ text = "Feb 26 - Train classifier on..."; type = "item"; color = $sessionDimColor; font = $smallFont },
+    @{ text = "Feb 24 - Fix data pipeline..."; type = "item"; color = $sessionDimColor; font = $smallFont },
+    @{ text = "Feb 22 - Add batch process..."; type = "item"; color = $sessionDimColor; font = $smallFont }
 )
-Draw-MenuMockup "screenshot_submenu.png" $menuItems2 260 $null
+Draw-Panel $gfx ($img1W + 2) 30 295 $subItems $sepColor $subBgColor
 
-# --- Screenshot 4: Tray area mockup ---
+$gfx.Dispose()
+$bmp2.Save((Join-Path $docsDir "screenshot_submenu.png"), [System.Drawing.Imaging.ImageFormat]::Png)
+$bmp2.Dispose()
+Write-Host "  Generated screenshot_submenu.png"
+
+# ============================================================
+# Screenshot 3: Tray area with rocket icon
+# ============================================================
 $trayW = 320
 $trayH = 44
 $trayBmp = New-Object System.Drawing.Bitmap($trayW, $trayH)
 $gfx = [System.Drawing.Graphics]::FromImage($trayBmp)
 $gfx.Clear([System.Drawing.Color]::FromArgb(28, 28, 28))
 
-# Fake taskbar line at top
 $linePen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(50, 50, 50), 1)
 $gfx.DrawLine($linePen, 0, 0, $trayW, 0)
 
-# System tray icons (fake)
 $trayFont = New-Object System.Drawing.Font("Segoe UI", 9)
 $trayBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(180, 180, 180))
 $gfx.DrawString("^", $trayFont, $trayBrush, 8, 12)
 $gfx.DrawString("Wi-Fi", $smallFont, $trayBrush, 40, 14)
 $gfx.DrawString("Vol", $smallFont, $trayBrush, 90, 14)
 
-# ClaudeDock rocket icon - load from variant_c.png and draw scaled
+# ClaudeDock rocket icon
 $rocketPath = Join-Path $docsDir "variant_c.png"
 if (Test-Path $rocketPath) {
     $rocketImg = [System.Drawing.Image]::FromFile($rocketPath)
     $gfx.InterpolationMode = "NearestNeighbor"
     $gfx.DrawImage($rocketImg, 138, 8, 28, 28)
     $rocketImg.Dispose()
-} else {
-    # Fallback orange circle
-    $iconBrush = New-Object System.Drawing.SolidBrush($accentColor)
-    $gfx.FillEllipse($iconBrush, 140, 10, 24, 24)
 }
 
-# Time
 $timeBrush = New-Object System.Drawing.SolidBrush($textColor)
 $gfx.DrawString("2:45 PM", $trayFont, $timeBrush, 250, 8)
 $gfx.DrawString("2/27/2026", $smallFont, $trayBrush, 248, 24)

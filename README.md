@@ -4,6 +4,8 @@
   <img src="docs/variant_c.png" alt="ClaudeDock icon" width="64">
 </p>
 
+<p align="center"><strong>Get back to your projects faster.</strong></p>
+
 A lightweight Windows system tray app for managing and launching [Claude Code](https://docs.anthropic.com/en/docs/claude-code) projects with one click.
 
 Click the tray icon to see your projects. Select one to open **File Explorer**, **VS Code**, and a **terminal with Claude Code** all at once. Resume previous conversations or start fresh.
@@ -17,17 +19,19 @@ Click the tray icon to see your projects. Select one to open **File Explorer**, 
 </p>
 
 <p align="center">
-  <img src="docs/screenshot_menu.png" alt="Project menu" width="260">
+  <img src="docs/screenshot_menu.png" alt="Project menu with git status" width="260">
   &nbsp;&nbsp;
-  <img src="docs/screenshot_hover.png" alt="Project hover" width="260">
+  <img src="docs/screenshot_submenu.png" alt="Project submenu with sessions" width="320">
   <br>
-  <em>Click to see your projects — select one to launch</em>
+  <em>Git status at a glance, session history per project</em>
 </p>
 
 ## Features
 
 - System tray icon, always one click away
 - One-click launch: Explorer + VS Code + Claude Code terminal
+- Git status per project (branch, uncommitted changes, unpushed commits)
+- Session resume: continue your last conversation or pick from recent sessions
 - Simple JSON configuration
 - Toggle which apps to launch (Explorer, VS Code, Claude)
 - No dependencies beyond PowerShell (ships with Windows)
@@ -103,9 +107,9 @@ Run `create-shortcut.ps1` to generate a desktop shortcut, then right-click it an
 
 ## Roadmap
 
-- [ ] Session resume (pick from recent conversations per project)
+- [x] Session resume (pick from recent conversations per project)
+- [x] Git status indicators per project
 - [ ] Usage monitoring (tokens per project, parsed from local session files)
-- [ ] Git status indicators per project
 - [ ] Session history and stats
 
 ## License
