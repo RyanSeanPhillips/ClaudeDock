@@ -22,7 +22,7 @@ $configPath = Join-Path $scriptDir "config.json"
 if (-not (Test-Path $configPath)) {
     [System.Windows.Forms.MessageBox]::Show(
         "config.json not found in:`n$scriptDir`n`nCreate a config.json with your projects.",
-        "Claude Launcher", "OK", "Error")
+        "ClaudeDock", "OK", "Error")
     exit 1
 }
 
@@ -40,7 +40,7 @@ if (Test-Path $icoPath) {
     $gfx = [System.Drawing.Graphics]::FromImage($bmp)
     $gfx.SmoothingMode = "AntiAlias"
     $gfx.Clear([System.Drawing.Color]::Transparent)
-    $bgBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(218, 143, 78))
+    $bgBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(217, 119, 6))
     $gfx.FillEllipse($bgBrush, 2, 2, 60, 60)
     $font = New-Object System.Drawing.Font("Consolas", 20, [System.Drawing.FontStyle]::Bold)
     $textBrush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(30, 30, 30))
@@ -53,65 +53,261 @@ if (Test-Path $icoPath) {
     $icon = [System.Drawing.Icon]::FromHandle($hIcon)
 }
 
-# --- Launch function ---
+# --- Claude sessions directory ---
+$claudeProjectsDir = Join-Path $env:USERPROFILE ".claude\projects"
+
+function Get-ProjectSlug($path) {
+    # Convert project path to Claude's directory slug format
+    $slug = $path -replace ':', ''
+    $slug = $slug -replace '\\', '-'
+    $slug = $slug -replace '/', '-'
+    $slug = $slug -replace ' ', '-'
+    return $slug
+}
+
+function Get-RecentSessions($projectPath, $maxSessions) {
+    $slug = Get-ProjectSlug $projectPath
+    $sessionDir = Join-Path $claudeProjectsDir $slug
+    $sessions = @()
+
+    if (Test-Path $sessionDir) {
+        $jsonlFiles = Get-ChildItem -Path $sessionDir -Filter "*.jsonl" -File |
+            Sort-Object LastWriteTime -Descending |
+            Select-Object -First $maxSessions
+
+        foreach ($file in $jsonlFiles) {
+            $sessionId = $file.BaseName
+            $modified = $file.LastWriteTime
+
+            # Try to get first user message for context
+            $summary = ""
+            try {
+                $lines = Get-Content $file.FullName -TotalCount 10 -ErrorAction SilentlyContinue
+                foreach ($line in $lines) {
+                    if ($line -match '"type":"user"' -and $line -match '"role":"user"') {
+                        # Extract a snippet of the user message
+                        if ($line -match '"content":"([^"]{1,80})') {
+                            $summary = $Matches[1]
+                            # Clean up escape sequences
+                            $summary = $summary -replace '\\n', ' '
+                            $summary = $summary -replace '\\t', ' '
+                            if ($summary.Length -gt 50) {
+                                $summary = $summary.Substring(0, 47) + "..."
+                            }
+                        }
+                        break
+                    }
+                }
+            } catch { }
+
+            if (-not $summary) {
+                $summary = $modified.ToString("MMM d, h:mm tt")
+            }
+
+            $sessions += @{
+                Id = $sessionId
+                Modified = $modified
+                Summary = $summary
+                DateLabel = $modified.ToString("MMM d")
+            }
+        }
+    }
+    return $sessions
+}
+
+function Get-GitStatus($projectPath) {
+    # Returns git status string like "(main ✓)" or "(main ↑2 ●3)"
+    try {
+        $gitDir = Join-Path $projectPath ".git"
+        if (-not (Test-Path $gitDir)) { return "" }
+
+        $branch = & git -C $projectPath rev-parse --abbrev-ref HEAD 2>$null
+        if (-not $branch) { return "" }
+
+        # Uncommitted changes
+        $statusOutput = & git -C $projectPath status --porcelain 2>$null
+        $dirty = 0
+        if ($statusOutput) {
+            $dirty = ($statusOutput | Measure-Object).Count
+        }
+
+        # Unpushed commits
+        $unpushed = 0
+        $upstream = & git -C $projectPath rev-parse --abbrev-ref "@{upstream}" 2>$null
+        if ($upstream) {
+            $unpushedOutput = & git -C $projectPath rev-list "$upstream..HEAD" 2>$null
+            if ($unpushedOutput) {
+                $unpushed = ($unpushedOutput | Measure-Object).Count
+            }
+        }
+
+        $status = "($branch"
+        if ($unpushed -gt 0) { $status += " ↑$unpushed" }
+        if ($dirty -gt 0) { $status += " ●$dirty" }
+        if ($unpushed -eq 0 -and $dirty -eq 0) { $status += " ✓" }
+        $status += ")"
+
+        return $status
+    } catch {
+        return ""
+    }
+}
+
+# --- Launch functions ---
 function Launch-Project($path) {
-    # Open a new Explorer window (not reusing existing)
     if ($launchOpts.explorer) {
         Start-Process explorer.exe "/n,`"$path`""
     }
-    # VS Code: --new-window forces a new window on the current desktop
-    # Launch via cmd /c with hidden window to avoid extra cmd flash (code is a .cmd file)
     if ($launchOpts.vscode) {
         Start-Process cmd "/c code --new-window `"$path`"" -WindowStyle Hidden
     }
-    # cmd always opens a new window on current desktop
     if ($launchOpts.claude) {
         Start-Process cmd "/k cd /d `"$path`" && claude"
     }
 }
 
-# --- Context menu ---
-$contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
-$contextMenu.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
-$contextMenu.ForeColor = [System.Drawing.Color]::White
-$contextMenu.ShowImageMargin = $false
-$contextMenu.Font = New-Object System.Drawing.Font("Segoe UI", 10)
-
-$header = New-Object System.Windows.Forms.ToolStripLabel("  Launch Project")
-$header.ForeColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
-$header.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
-$contextMenu.Items.Add($header)
-$contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
-
-foreach ($proj in $projects) {
-    $item = New-Object System.Windows.Forms.ToolStripMenuItem($proj.name)
-    $item.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
-    $item.ForeColor = [System.Drawing.Color]::White
-    $item.Tag = $proj.path
-    $item.Add_Click({
-        param($sender, $e)
-        Launch-Project $sender.Tag
-    })
-    $contextMenu.Items.Add($item)
+function Launch-ProjectContinue($path) {
+    if ($launchOpts.explorer) {
+        Start-Process explorer.exe "/n,`"$path`""
+    }
+    if ($launchOpts.vscode) {
+        Start-Process cmd "/c code --new-window `"$path`"" -WindowStyle Hidden
+    }
+    Start-Process cmd "/k cd /d `"$path`" && claude --continue"
 }
 
-$contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator))
-
-$quit = New-Object System.Windows.Forms.ToolStripMenuItem("Quit")
-$quit.ForeColor = [System.Drawing.Color]::FromArgb(180, 80, 80)
-$quit.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
-$quit.Add_Click({
-    $notifyIcon.Visible = $false
-    $notifyIcon.Dispose()
-    [System.Windows.Forms.Application]::Exit()
-})
-$contextMenu.Items.Add($quit)
-
-foreach ($item in $contextMenu.Items) {
-    if ($item -is [System.Windows.Forms.ToolStripSeparator]) {
-        $item.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
-        $item.ForeColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
+function Launch-ProjectResume($path, $sessionId) {
+    if ($launchOpts.explorer) {
+        Start-Process explorer.exe "/n,`"$path`""
     }
+    if ($launchOpts.vscode) {
+        Start-Process cmd "/c code --new-window `"$path`"" -WindowStyle Hidden
+    }
+    Start-Process cmd "/k cd /d `"$path`" && claude --resume $sessionId"
+}
+
+# --- Build context menu dynamically on each open ---
+function Build-Menu() {
+    $contextMenu = New-Object System.Windows.Forms.ContextMenuStrip
+    $contextMenu.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $contextMenu.ForeColor = [System.Drawing.Color]::White
+    $contextMenu.ShowImageMargin = $false
+    $contextMenu.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+    $contextMenu.Renderer = New-Object System.Windows.Forms.ToolStripProfessionalRenderer(
+        (New-Object System.Windows.Forms.ProfessionalColorTable)
+    )
+
+    # Header
+    $header = New-Object System.Windows.Forms.ToolStripLabel("  ClaudeDock")
+    $header.ForeColor = [System.Drawing.Color]::FromArgb(160, 160, 160)
+    $header.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Italic)
+    $contextMenu.Items.Add($header) | Out-Null
+    $contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
+
+    foreach ($proj in $projects) {
+        $projPath = $proj.path
+        $projName = $proj.name
+
+        # Get git status
+        $gitStatus = Get-GitStatus $projPath
+        $displayName = if ($gitStatus) { "$projName  $gitStatus" } else { $projName }
+
+        # Create project submenu
+        $projItem = New-Object System.Windows.Forms.ToolStripMenuItem($displayName)
+        $projItem.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+        $projItem.ForeColor = [System.Drawing.Color]::White
+
+        # Color the git status portion
+        if ($gitStatus -match '✓') {
+            # all clean - no special color needed
+        } elseif ($gitStatus -match '●|↑') {
+            $projItem.ForeColor = [System.Drawing.Color]::FromArgb(255, 200, 80)
+        }
+
+        # --- Submenu items ---
+
+        # New Session
+        $newItem = New-Object System.Windows.Forms.ToolStripMenuItem("New Session")
+        $newItem.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 43)
+        $newItem.ForeColor = [System.Drawing.Color]::White
+        $newItem.Tag = $projPath
+        $newItem.Add_Click({
+            param($sender, $e)
+            Launch-Project $sender.Tag
+        })
+        $projItem.DropDownItems.Add($newItem) | Out-Null
+
+        # Continue Last
+        $contItem = New-Object System.Windows.Forms.ToolStripMenuItem("Continue Last")
+        $contItem.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 43)
+        $contItem.ForeColor = [System.Drawing.Color]::FromArgb(140, 200, 255)
+        $contItem.Tag = $projPath
+        $contItem.Add_Click({
+            param($sender, $e)
+            Launch-ProjectContinue $sender.Tag
+        })
+        $projItem.DropDownItems.Add($contItem) | Out-Null
+
+        # Separator before recent sessions
+        $projItem.DropDownItems.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
+
+        # Recent sessions
+        $sessions = Get-RecentSessions $projPath 5
+        if ($sessions.Count -gt 0) {
+            $recentLabel = New-Object System.Windows.Forms.ToolStripLabel("  Recent Sessions")
+            $recentLabel.ForeColor = [System.Drawing.Color]::FromArgb(120, 120, 120)
+            $recentLabel.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Italic)
+            $projItem.DropDownItems.Add($recentLabel) | Out-Null
+
+            foreach ($session in $sessions) {
+                $label = "$($session.DateLabel) - $($session.Summary)"
+                $sessItem = New-Object System.Windows.Forms.ToolStripMenuItem($label)
+                $sessItem.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 43)
+                $sessItem.ForeColor = [System.Drawing.Color]::FromArgb(180, 180, 180)
+                $sessItem.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+                $sessItem.Tag = @{ Path = $projPath; SessionId = $session.Id }
+                $sessItem.Add_Click({
+                    param($sender, $e)
+                    $info = $sender.Tag
+                    Launch-ProjectResume $info.Path $info.SessionId
+                })
+                $projItem.DropDownItems.Add($sessItem) | Out-Null
+            }
+        } else {
+            $noSess = New-Object System.Windows.Forms.ToolStripLabel("  No recent sessions")
+            $noSess.ForeColor = [System.Drawing.Color]::FromArgb(100, 100, 100)
+            $noSess.Font = New-Object System.Drawing.Font("Segoe UI", 8, [System.Drawing.FontStyle]::Italic)
+            $projItem.DropDownItems.Add($noSess) | Out-Null
+        }
+
+        # Style submenu
+        $projItem.DropDown.BackColor = [System.Drawing.Color]::FromArgb(40, 40, 43)
+
+        $contextMenu.Items.Add($projItem) | Out-Null
+    }
+
+    # Separator + Quit
+    $contextMenu.Items.Add((New-Object System.Windows.Forms.ToolStripSeparator)) | Out-Null
+
+    $quit = New-Object System.Windows.Forms.ToolStripMenuItem("Quit")
+    $quit.ForeColor = [System.Drawing.Color]::FromArgb(180, 80, 80)
+    $quit.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+    $quit.Add_Click({
+        $notifyIcon.Visible = $false
+        $notifyIcon.Dispose()
+        [System.Windows.Forms.Application]::Exit()
+    })
+    $contextMenu.Items.Add($quit) | Out-Null
+
+    # Style separators
+    foreach ($item in $contextMenu.Items) {
+        if ($item -is [System.Windows.Forms.ToolStripSeparator]) {
+            $item.BackColor = [System.Drawing.Color]::FromArgb(30, 30, 30)
+            $item.ForeColor = [System.Drawing.Color]::FromArgb(60, 60, 60)
+        }
+    }
+
+    return $contextMenu
 }
 
 # --- System tray icon ---
@@ -119,11 +315,18 @@ $notifyIcon = New-Object System.Windows.Forms.NotifyIcon
 $notifyIcon.Icon = $icon
 $notifyIcon.Text = "ClaudeDock"
 $notifyIcon.Visible = $true
-$notifyIcon.ContextMenuStrip = $contextMenu
 
-$notifyIcon.Add_Click({
-    if ($_.Button -eq [System.Windows.Forms.MouseButtons]::Left) {
-        $notifyIcon.ContextMenuStrip.Show([System.Windows.Forms.Cursor]::Position)
+# Build menu fresh on each click (so git status and sessions are current)
+$notifyIcon.Add_MouseClick({
+    param($sender, $e)
+    $menu = Build-Menu
+    $notifyIcon.ContextMenuStrip = $menu
+    if ($e.Button -eq [System.Windows.Forms.MouseButtons]::Left -or
+        $e.Button -eq [System.Windows.Forms.MouseButtons]::Right) {
+        # Use reflection to invoke the private ShowContextMenu method
+        $mi = $notifyIcon.GetType().GetMethod("ShowContextMenu",
+            [System.Reflection.BindingFlags]::Instance -bor [System.Reflection.BindingFlags]::NonPublic)
+        $mi.Invoke($notifyIcon, $null)
     }
 })
 
