@@ -1,20 +1,38 @@
 # ClaudeDock
 
+<p align="center">
+  <img src="docs/variant_c.png" alt="ClaudeDock icon" width="64">
+</p>
+
 A lightweight Windows system tray app for managing and launching [Claude Code](https://docs.anthropic.com/en/docs/claude-code) projects with one click.
 
 Click the tray icon to see your projects. Select one to open **File Explorer**, **VS Code**, and a **terminal with Claude Code** all at once. Resume previous conversations or start fresh.
+
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshot_tray.png" alt="ClaudeDock in the system tray" width="320">
+  <br>
+  <em>ClaudeDock lives in your system tray</em>
+</p>
+
+<p align="center">
+  <img src="docs/screenshot_menu.png" alt="Project menu" width="260">
+  &nbsp;&nbsp;
+  <img src="docs/screenshot_hover.png" alt="Project hover" width="260">
+  <br>
+  <em>Click to see your projects — select one to launch</em>
+</p>
 
 ## Features
 
 - System tray icon, always one click away
 - One-click launch: Explorer + VS Code + Claude Code terminal
-- Resume previous Claude Code conversations per project
-- Continue your most recent session or pick from history
 - Simple JSON configuration
-- Customizable icon color
 - Toggle which apps to launch (Explorer, VS Code, Claude)
 - No dependencies beyond PowerShell (ships with Windows)
 - Auto-start on login with included install script
+- Pin to taskbar for quick access
 
 ## Quick Start
 
@@ -50,11 +68,15 @@ Click the tray icon to see your projects. Select one to open **File Explorer**, 
 
 ## Usage
 
-Left-click or right-click the tray icon to see your projects. Each project expands to show:
+Left-click or right-click the tray icon to see your projects. Click a project to open:
 
-- **New Session** — launch Claude Code with a fresh conversation
-- **Continue Last** — resume your most recent conversation (`claude --continue`)
-- **Recent sessions** — pick a specific conversation to resume (`claude --resume`)
+- **File Explorer** at the project directory
+- **VS Code** with the project folder
+- **A terminal** with Claude Code already running
+
+## Pin to Taskbar
+
+Run `create-shortcut.ps1` to generate a desktop shortcut, then right-click it and select **Pin to taskbar**.
 
 ## Configuration
 
@@ -83,6 +105,7 @@ Left-click or right-click the tray icon to see your projects. Each project expan
 
 - [ ] Session resume (pick from recent conversations per project)
 - [ ] Usage monitoring (tokens per project, parsed from local session files)
+- [ ] Git status indicators per project
 - [ ] Session history and stats
 
 ## License
